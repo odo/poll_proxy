@@ -1,8 +1,11 @@
+# TODO: exit with last subscriber
+# TODO: make poll async
+
 defmodule PollProxy.Worker do
   use GenServer
   alias PollProxy.Worker
 
-  defstruct [:subscribers, :poll_module, :poll_args, :poll_interval, :name]
+  defstruct [:subscribers, :poll_module, :poll_module_state, :poll_interval, :name]
 
   defmodule PollProxy.Worker.Subscriber do
       defstruct [:pid, :monitor]
@@ -15,10 +18,11 @@ defmodule PollProxy.Worker do
   end
 
   def init(%{poll_module: poll_module, poll_args: poll_args, name: name}) do
+    {:ok, poll_module_state} = apply(poll_module, :init, poll_args)
     init_state = %Worker{
       subscribers: %{},
       poll_module: poll_module,
-      poll_args: poll_args,
+      poll_module_state: poll_module_state,
       poll_interval: poll_module.interval,
       name: name
     }
@@ -47,19 +51,21 @@ defmodule PollProxy.Worker do
   end
 
   def handle_info(:poll, state) do
-    case apply(state.poll_module, :poll, state.poll_args) do
-      :no_update ->
-          :noop
-      {:update, update_data} ->
+    next_poll_module_state =
+    case apply(state.poll_module, :poll, [state.poll_module_state]) do
+      {:no_update, next_poll_module_state} ->
+          next_poll_module_state
+      {:update, update_data, next_poll_module_state} ->
         Map.keys(state.subscribers)
         |> Enum.each(
           fn(pid) ->
-            apply(state.poll_module, :handle_update, [pid, update_data])
+            apply(state.poll_module, :handle_update, [update_data, pid, next_poll_module_state])
           end
         )
+        next_poll_module_state
     end
     Process.send_after(self(), :poll, state.poll_interval, [])
-    {:noreply, state}
+    {:noreply, %Worker{state | poll_module_state: next_poll_module_state}}
   end
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
     {:reply, :ok, next_state} = handle_call({:unsubscribe, pid}, self(), state)

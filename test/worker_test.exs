@@ -7,13 +7,17 @@ defmodule PollProxyWorkerTest do
 
     def interval, do: 10
 
-    def poll(:always_update) do
-      {:update, :next_value}
+    def init(mode) do
+      {:ok, mode}
     end
-    def poll(:never_update) do
-      :no_update
+
+    def poll(:always_update = mode) do
+      {:update, :next_value, mode}
     end
-    def handle_update(subscriber, update_data) do
+    def poll(:never_update = mode) do
+      {:no_update, mode}
+    end
+    def handle_update(update_data, subscriber, _mode) do
       Process.send(subscriber, {:update, update_data}, [])
       :ok
     end

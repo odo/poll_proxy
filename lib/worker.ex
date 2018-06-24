@@ -16,7 +16,7 @@ defmodule PollProxy.Worker do
 
   def init(%{poll_module: poll_module, poll_args: poll_args, name: name}) do
     init_state = %Worker{
-      subscribers: :ets.new(:subscribers, [:set]),
+      subscribers: %{},
       poll_module: poll_module,
       poll_args: poll_args,
       poll_interval: poll_module.interval,
@@ -28,20 +28,22 @@ defmodule PollProxy.Worker do
 
   def handle_call({:subscribe, pid}, _from, %Worker{subscribers: subscribers} = state) do
     subscriber = %Subscriber{pid: pid, monitor: Process.monitor(pid)}
-    :ets.insert(subscribers, {pid, subscriber})
-    {:reply, :ok, state}
+    next_subscribers = Map.put(subscribers, pid, subscriber)
+    {:reply, :ok, %Worker{state | subscribers: next_subscribers}}
   end
   def handle_call({:unsubscribe, pid}, _from, %Worker{subscribers: subscribers} = state) do
-    case :ets.lookup(subscribers, pid) do
-      [] -> :noop
-      [{^pid, %Subscriber{} = subscriber}] ->
+    next_subscribers =
+    case Map.get(subscribers, pid) do
+      :nil ->
+        subscribers
+      %Subscriber{} = subscriber ->
         Process.demonitor(subscriber.monitor)
-        :ets.delete(subscribers, pid)
+        Map.delete(subscribers, pid)
     end
-    {:reply, :ok, state}
+    {:reply, :ok, %Worker{state | subscribers: next_subscribers}}
   end
   def handle_call(:subscribers, _from, %Worker{subscribers: subscribers} = state) do
-    {:reply, :ets.tab2list(subscribers), state}
+    {:reply, Enum.into(subscribers, []), state}
   end
 
   def handle_info(:poll, state) do
@@ -49,9 +51,9 @@ defmodule PollProxy.Worker do
       :no_update ->
           :noop
       {:update, update_data} ->
-        :ets.tab2list(state.subscribers)
+        Map.keys(state.subscribers)
         |> Enum.each(
-          fn({pid, _}) ->
+          fn(pid) ->
             apply(state.poll_module, :handle_update, [pid, update_data])
           end
         )

@@ -10,8 +10,8 @@ defmodule PollProxy.Supervisor do
     DynamicSupervisor.init(strategy: :one_for_one)
   end
 
-  def start_child(poll_module, poll_args, poll_interval, name) when is_atom(poll_module) and is_list(poll_args) and is_integer(poll_interval) and is_atom(name) do
-    start_args = %{poll_module: poll_module, poll_args: poll_args, poll_interval: poll_interval, name: name}
+  def start_child(poll_module, poll_args, name) when is_atom(poll_module) and is_list(poll_args) and is_atom(name) do
+    start_args = %{poll_module: poll_module, poll_args: poll_args, name: name}
     DynamicSupervisor.start_child(
       __MODULE__,
       %{

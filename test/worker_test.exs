@@ -15,7 +15,7 @@ defmodule PollProxyWorkerTest do
       {:update, :next_value, mode}
     end
     def poll(:never_update = mode) do
-      {:no_update, mode}
+      {:noupdate, mode}
     end
     def handle_update(update_data, subscriber, _mode) do
       Process.send(subscriber, {:update, update_data}, [])
@@ -60,6 +60,9 @@ defmodule PollProxyWorkerTest do
     {:ok, init_state} = Worker.init(%{poll_module: TestPoller, poll_args: [:always_update], name: name})
     {:reply, :ok, subscribed_state} = Worker.handle_call({:subscribe, me}, me, init_state)
     Worker.handle_info(:poll, subscribed_state)
+    poll_result_msg = {:poll_result, {:update, :next_value, :always_update}}
+    assert_receive(^poll_result_msg, 100)
+    Worker.handle_info(poll_result_msg, subscribed_state)
     assert_receive({:update, :next_value}, 100)
   end
 

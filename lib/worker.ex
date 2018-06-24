@@ -1,5 +1,4 @@
 # TODO: exit with last subscriber
-# TODO: make poll async
 
 defmodule PollProxy.Worker do
   use GenServer
@@ -15,6 +14,10 @@ defmodule PollProxy.Worker do
 
   def start_link(args = %{name: name}) do
     GenServer.start_link(__MODULE__, args, name: name)
+  end
+
+  def subscribe(server, pid \\ self()) do
+    GenServer.call(server, {:subscribe, pid})
   end
 
   def init(%{poll_module: poll_module, poll_args: poll_args, name: name}) do
@@ -51,22 +54,31 @@ defmodule PollProxy.Worker do
   end
 
   def handle_info(:poll, state) do
-    next_poll_module_state =
-    case apply(state.poll_module, :poll, [state.poll_module_state]) do
-      {:no_update, next_poll_module_state} ->
-          next_poll_module_state
-      {:update, update_data, next_poll_module_state} ->
-        Map.keys(state.subscribers)
-        |> Enum.each(
-          fn(pid) ->
-            apply(state.poll_module, :handle_update, [update_data, pid, next_poll_module_state])
-          end
-        )
-        next_poll_module_state
-    end
+    me = self()
+    Process.spawn(
+      fn() ->
+        poll_result = apply(state.poll_module, :poll, [state.poll_module_state])
+        Process.send(me, {:poll_result, poll_result}, [])
+      end,
+      [:link]
+    )
+    {:noreply, state}
+  end
+  def handle_info({:poll_result, {:noupdate, next_poll_module_state}}, state) do
     Process.send_after(self(), :poll, state.poll_interval, [])
     {:noreply, %Worker{state | poll_module_state: next_poll_module_state}}
   end
+  def handle_info({:poll_result, {:update, update_data, next_poll_module_state}}, state) do
+    Enum.each(
+      Map.keys(state.subscribers),
+      fn(pid) ->
+        apply(state.poll_module, :handle_update, [update_data, pid, next_poll_module_state])
+      end
+    )
+    Process.send_after(self(), :poll, state.poll_interval, [])
+    {:noreply, %Worker{state | poll_module_state: next_poll_module_state}}
+  end
+
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
     {:reply, :ok, next_state} = handle_call({:unsubscribe, pid}, self(), state)
     {:noreply, next_state}

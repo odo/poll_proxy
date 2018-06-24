@@ -20,6 +20,10 @@ defmodule PollProxy.Worker do
     GenServer.call(server, {:subscribe, pid})
   end
 
+  def unsubscribe(server, pid \\ self()) do
+    GenServer.call(server, {:unsubscribe, pid})
+  end
+
   def init(%{poll_module: poll_module, poll_args: poll_args, name: name}) do
     {:ok, poll_module_state} = apply(poll_module, :init, poll_args)
     init_state = %Worker{
@@ -34,9 +38,14 @@ defmodule PollProxy.Worker do
   end
 
   def handle_call({:subscribe, pid}, _from, %Worker{subscribers: subscribers} = state) do
-    subscriber = %Subscriber{pid: pid, monitor: Process.monitor(pid)}
-    next_subscribers = Map.put(subscribers, pid, subscriber)
-    {:reply, :ok, %Worker{state | subscribers: next_subscribers}}
+    case Map.get(subscribers, pid) do
+      nil ->
+        subscriber = %Subscriber{pid: pid, monitor: Process.monitor(pid)}
+        next_subscribers = Map.put(subscribers, pid, subscriber)
+        {:reply, :ok, %Worker{state | subscribers: next_subscribers}}
+      _ ->
+        {:reply, :ok, state}
+    end
   end
   def handle_call({:unsubscribe, pid}, _from, %Worker{subscribers: subscribers} = state) do
     next_subscribers =
@@ -72,7 +81,9 @@ defmodule PollProxy.Worker do
     Enum.each(
       Map.keys(state.subscribers),
       fn(pid) ->
-        apply(state.poll_module, :handle_update, [update_data, pid, next_poll_module_state])
+        Process.spawn(fn ->
+          apply(state.poll_module, :handle_update, [update_data, pid, next_poll_module_state])
+        end, [] )
       end
     )
     Process.send_after(self(), :poll, state.poll_interval, [])

@@ -45,6 +45,16 @@ defmodule PollProxyWorkerTest do
     assert  {:reply, [], ^unsubscribed_state} = Worker.handle_call(:subscribers, me, unsubscribed_state)
   end
 
+  test "subscribe and unsubscribe with stop_when_empty" do
+    me = self()
+    name = :test_name
+    {:ok, init_state} = Worker.init(%{poll_module: TestPoller, poll_args: [:never_update], name: name, stop_when_empty: true})
+    assert  {:reply, [], init_state} == Worker.handle_call(:subscribers, me, init_state)
+
+    {:stop, :normal, :ok, _} = Worker.handle_call({:unsubscribe, me}, me, init_state)
+  end
+
+
   test "subscribe and unsubscribes when subscriber dies" do
     me = self()
     name = :test_name
@@ -53,6 +63,16 @@ defmodule PollProxyWorkerTest do
     {:noreply, unsubscribed_state} = Worker.handle_info({:DOWN, :the_ref, :process, me, :the_reason}, subscribed_state)
     assert  {:reply, [], ^unsubscribed_state} = Worker.handle_call(:subscribers, me, unsubscribed_state)
   end
+
+  test "subscribe and unsubscribes with stop_when_empty when subscriber dies" do
+    me = self()
+    name = :test_name
+    {:ok, init_state} = Worker.init(%{poll_module: TestPoller, poll_args: [:never_update], name: name, stop_when_empty: true})
+    {:reply, :ok, subscribed_state} = Worker.handle_call({:subscribe, me}, me, init_state)
+    {:stop, :normal, unsubscribed_state} = Worker.handle_info({:DOWN, :the_ref, :process, me, :the_reason}, subscribed_state)
+    assert  {:reply, [], ^unsubscribed_state} = Worker.handle_call(:subscribers, me, unsubscribed_state)
+  end
+
 
   test "notify" do
     me = self()

@@ -1,10 +1,8 @@
-# TODO: exit with last subscriber
-
 defmodule PollProxy.Worker do
   use GenServer
   alias PollProxy.Worker
 
-  defstruct [:subscribers, :poll_module, :poll_module_state, :poll_interval, :name]
+  defstruct [:subscribers, :poll_module, :poll_module_state, :poll_interval, :name, :stop_when_empty]
 
   defmodule PollProxy.Worker.Subscriber do
       defstruct [:pid, :monitor]
@@ -24,14 +22,15 @@ defmodule PollProxy.Worker do
     GenServer.call(server, {:unsubscribe, pid})
   end
 
-  def init(%{poll_module: poll_module, poll_args: poll_args, name: name}) do
+  def init(%{poll_module: poll_module, poll_args: poll_args, name: name} = options) do
     {:ok, poll_module_state} = apply(poll_module, :init, poll_args)
     init_state = %Worker{
       subscribers: %{},
       poll_module: poll_module,
       poll_module_state: poll_module_state,
       poll_interval: poll_module.interval,
-      name: name
+      name: name,
+      stop_when_empty: Map.get(options, :stop_when_empty, :false)
     }
     Process.send(self(), :poll, [])
     {:ok, init_state}
@@ -47,7 +46,7 @@ defmodule PollProxy.Worker do
         {:reply, :ok, state}
     end
   end
-  def handle_call({:unsubscribe, pid}, _from, %Worker{subscribers: subscribers} = state) do
+  def handle_call({:unsubscribe, pid}, _from, %Worker{subscribers: subscribers, stop_when_empty: stop_when_empty} = state) do
     next_subscribers =
     case Map.get(subscribers, pid) do
       :nil ->
@@ -56,7 +55,13 @@ defmodule PollProxy.Worker do
         Process.demonitor(subscriber.monitor)
         Map.delete(subscribers, pid)
     end
-    {:reply, :ok, %Worker{state | subscribers: next_subscribers}}
+    next_state = %Worker{state | subscribers: next_subscribers}
+    case {stop_when_empty, subscribers} do
+      {false, _} ->
+        {:reply, :ok, next_state}
+      {true, %{}} ->
+        {:stop, :normal, :ok, next_state}
+    end
   end
   def handle_call(:subscribers, _from, %Worker{subscribers: subscribers} = state) do
     {:reply, Enum.into(subscribers, []), state}
@@ -91,7 +96,12 @@ defmodule PollProxy.Worker do
   end
 
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
-    {:reply, :ok, next_state} = handle_call({:unsubscribe, pid}, self(), state)
-    {:noreply, next_state}
+    case handle_call({:unsubscribe, pid}, self(), state) do
+      {:reply, :ok, next_state} ->
+        {:noreply, next_state}
+      {:stop, :normal, :ok, next_state} ->
+        {:stop, :normal, next_state}
+    end
   end
+
 end

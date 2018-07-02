@@ -22,10 +22,6 @@ defmodule PollProxy.Worker do
     GenServer.call(server, {:unsubscribe, pid})
   end
 
-  def swap_subscription(server, source \\ self(), heir) do
-    GenServer.call(server, {:swap_supscription, source, heir})
-  end
-
   def init(%{poll_module: poll_module, poll_args: poll_args, name: name} = options) do
     {:ok, poll_module_state} = apply(poll_module, :init, poll_args)
     init_state = %Worker{
@@ -40,25 +36,32 @@ defmodule PollProxy.Worker do
     {:ok, init_state}
   end
 
-  def handle_call({:subscribe, pid}, _from, state) do
-    {:reply, :ok, add_subscriber(state, pid)}
+  def handle_call({:subscribe, pid}, _from, %Worker{subscribers: subscribers} = state) do
+    case Map.get(subscribers, pid) do
+      nil ->
+        subscriber = %Subscriber{pid: pid, monitor: Process.monitor(pid)}
+        next_subscribers = Map.put(subscribers, pid, subscriber)
+        {:reply, :ok, %Worker{state | subscribers: next_subscribers}}
+      _ ->
+        {:reply, :ok, state}
+    end
   end
-  def handle_call({:unsubscribe, pid}, _from, %Worker{stop_when_empty: stop_when_empty} = state) do
-    next_state = remove_subscriber(state, pid)
-    case {stop_when_empty, next_state.subscribers} do
+  def handle_call({:unsubscribe, pid}, _from, %Worker{subscribers: subscribers, stop_when_empty: stop_when_empty} = state) do
+    next_subscribers =
+    case Map.get(subscribers, pid) do
+      :nil ->
+        subscribers
+      %Subscriber{} = subscriber ->
+        Process.demonitor(subscriber.monitor)
+        Map.delete(subscribers, pid)
+    end
+    next_state = %Worker{state | subscribers: next_subscribers}
+    case {stop_when_empty, subscribers} do
       {false, _} ->
         {:reply, :ok, next_state}
       {true, %{}} ->
         {:stop, :normal, :ok, next_state}
     end
-  end
-  def handle_call({:swap_supscription, source, heir}, _from, state) do
-    next_state =
-    state
-    |> remove_subscriber(source)
-    |> add_subscriber(heir)
-
-    {:reply, :ok, next_state}
   end
   def handle_call(:subscribers, _from, %Worker{subscribers: subscribers} = state) do
     {:reply, Enum.into(subscribers, []), state}
@@ -99,29 +102,6 @@ defmodule PollProxy.Worker do
       {:stop, :normal, :ok, next_state} ->
         {:stop, :normal, next_state}
     end
-  end
-
-  defp add_subscriber(%Worker{subscribers: subscribers} = state, pid) do
-    case Map.get(subscribers, pid) do
-     nil ->
-       subscriber = %Subscriber{pid: pid, monitor: Process.monitor(pid)}
-       next_subscribers = Map.put(subscribers, pid, subscriber)
-       %Worker{state | subscribers: next_subscribers}
-     _ ->
-       state
-   end
-  end
-
-  defp remove_subscriber(%Worker{subscribers: subscribers} = state, pid) do
-    next_subscribers =
-    case Map.get(subscribers, pid) do
-      :nil ->
-        subscribers
-      %Subscriber{} = subscriber ->
-        Process.demonitor(subscriber.monitor)
-        Map.delete(subscribers, pid)
-    end
-    %Worker{state | subscribers: next_subscribers}
   end
 
 end

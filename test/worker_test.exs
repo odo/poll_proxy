@@ -45,16 +45,6 @@ defmodule PollProxyWorkerTest do
     assert  {:reply, [], ^unsubscribed_state} = Worker.handle_call(:subscribers, me, unsubscribed_state)
   end
 
-  test "swap subscription" do
-    me = self()
-    name = :test_name
-    {:ok, init_state} = Worker.init(%{poll_module: TestPoller, poll_args: [:never_update], name: name})
-    {:reply, :ok, subscribed_state} = Worker.handle_call({:subscribe, me}, me, init_state)
-    assert  {:reply, [{^me, _}], ^subscribed_state} = Worker.handle_call(:subscribers, me, subscribed_state)
-    {:reply, :ok, subscribed_state} = Worker.handle_call({:swap_supscription, me, :other}, me, subscribed_state)
-    assert  {:reply, [{:other, _}], ^subscribed_state} = Worker.handle_call(:subscribers, me, subscribed_state)
-  end
-
   test "subscribe and unsubscribe with stop_when_empty" do
     me = self()
     name = :test_name

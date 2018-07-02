@@ -64,7 +64,6 @@ defmodule PollProxyWorkerTest do
     {:stop, :normal, :ok, _} = Worker.handle_call({:unsubscribe, me}, me, init_state)
   end
 
-
   test "subscribe and unsubscribes when subscriber dies" do
     me = self()
     name = :test_name
@@ -83,7 +82,6 @@ defmodule PollProxyWorkerTest do
     assert  {:reply, [], ^unsubscribed_state} = Worker.handle_call(:subscribers, me, unsubscribed_state)
   end
 
-
   test "notify" do
     me = self()
     name = :test_name
@@ -94,6 +92,12 @@ defmodule PollProxyWorkerTest do
     assert_receive(^poll_result_msg, 100)
     Worker.handle_info(poll_result_msg, subscribed_state)
     assert_receive({:update, :next_value}, 100)
+  end
+
+  test "last update" do
+    {:ok, init_state} = Worker.init(%{poll_module: TestPoller, poll_args: [:always_update], name: :server_name})
+    {:noreply, poll_state} = Worker.handle_info({:poll_result, {:update, :the_message, :_}}, init_state)
+    {:reply, :the_message, ^poll_state} = Worker.handle_call(:last_update, :_, poll_state)
   end
 
 end

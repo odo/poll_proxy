@@ -2,7 +2,7 @@ defmodule PollProxy.Worker do
   use GenServer
   alias PollProxy.Worker
 
-  defstruct [:subscribers, :poll_module, :poll_module_state, :poll_interval, :name, :stop_when_empty, :last_update]
+  defstruct [:subscribers, :poll_module, :poll_module_state, :poll_interval, :name, :stop_when_empty]
 
   defmodule PollProxy.Worker.Subscriber do
       defstruct [:pid, :monitor]
@@ -25,11 +25,6 @@ defmodule PollProxy.Worker do
   def swap_subscription(server, source \\ self(), heir) do
     GenServer.call(server, {:swap_supscription, source, heir})
   end
-
-  def last_update(server) do
-    GenServer.call(server, :last_update)
-  end
-
 
   def init(%{poll_module: poll_module, poll_args: poll_args, name: name} = options) do
     {:ok, poll_module_state} = apply(poll_module, :init, poll_args)
@@ -65,9 +60,6 @@ defmodule PollProxy.Worker do
 
     {:reply, :ok, next_state}
   end
-  def handle_call(:last_update, _from, %Worker{last_update: last_update} = state) do
-    {:reply, last_update, state}
-  end
   def handle_call(:subscribers, _from, %Worker{subscribers: subscribers} = state) do
     {:reply, Enum.into(subscribers, []), state}
   end
@@ -97,7 +89,7 @@ defmodule PollProxy.Worker do
       end
     )
     Process.send_after(self(), :poll, state.poll_interval, [])
-    {:noreply, %Worker{state | poll_module_state: next_poll_module_state, last_update: update_data}}
+    {:noreply, %Worker{state | poll_module_state: next_poll_module_state}}
   end
 
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do

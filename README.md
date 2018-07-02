@@ -4,7 +4,7 @@
 
 PollProxy allows many actors to subscribe to the result of a repeating polling operation.
 A typical use case is monitoring the change of state of an external resource (DB, API, file...).
-The bahaviour is defined by implementing `PollProxy.Poller`.
+The behaviour is defined by implementing `PollProxy.Poller`.
 
 Here is an example where we want to poll the numbers starting from 1 every 100 ms to find increasingly large numbers devisible by a given number. So if we start the poller with a modulus of 3 it should give us `[3, 6, 9, 12 ...]`.
 

@@ -91,7 +91,7 @@ defmodule PollProxy.Worker do
         end, [] )
       end
     )
-    Process.send_after(self(), :poll, state.poll_interval, [])
+    Process.send(self(), :poll, [])
     {:noreply, %Worker{state | poll_module_state: next_poll_module_state}}
   end
 

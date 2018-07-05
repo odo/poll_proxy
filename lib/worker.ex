@@ -46,7 +46,7 @@ defmodule PollProxy.Worker do
             next_subscribers = Map.put(subscribers, pid, subscriber)
             {:reply, :ok, %Worker{state | subscribers: next_subscribers}}
           false ->
-            {:reply, {:error, :not_synced}, state}
+            {:reply, {:error, :not_synced, last_update}, state}
         end
       _ ->
         {:reply, :ok, state}

@@ -89,3 +89,21 @@ iex(3)> PollProxy.unsubscribe(server)
 iex(4)> Process.whereis(server)
 nil
 ```
+
+### subscribing with synchronization
+
+Sometimes the subscriptions has to be aligned with events that happend before. Like handing over a stream client from a catch-up
+situation to a subscription. This can be done with a synchronization function which should return true for the matching last state of the poll proxy.
+
+In this example the poller is going through multiples of 10 and we are waiting for a sync after it passed 20:
+
+```elixir
+iex(1)>  {:ok, server}  = PollProxy.start_proxy_and_subscribe(PollProxy.Example.ModPoller, [10], self(), synconize: fn(i) -> i == 20 end)
+** (MatchError) no match of right hand side value: {:error, :not_synced, nil}
+    (poll_proxy) lib/poll_proxy.ex:23: PollProxy.start_proxy_and_subscribe/4
+iex(1)>  {:ok, server}  = PollProxy.start_proxy_and_subscribe(PollProxy.Example.ModPoller, [10], self(), synconize: fn(i) -> i == 20 end)
+** (MatchError) no match of right hand side value: {:error, :not_synced, 10}
+    (poll_proxy) lib/poll_proxy.ex:23: PollProxy.start_proxy_and_subscribe/4
+iex(1)>  {:ok, server}  = PollProxy.start_proxy_and_subscribe(PollProxy.Example.ModPoller, [10], self(), synconize: fn(i) -> i == 20 end)
+{:ok, :poll_proxy_432906863}
+```

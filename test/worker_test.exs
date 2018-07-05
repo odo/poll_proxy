@@ -52,9 +52,9 @@ defmodule PollProxyWorkerTest do
 
     sync_fun = fn(last_message) -> last_message == :second_value end
 
-    {:reply, {:error, :not_synced}, next_state} = Worker.handle_call({:subscribe, me, sync_fun}, me, init_state)
+    {:reply, {:error, :not_synced, nil}, next_state} = Worker.handle_call({:subscribe, me, sync_fun}, me, init_state)
     {:noreply, next_state} = Worker.handle_info({:poll_result, {:update, :first_value, :always_update}}, next_state)
-    {:reply, {:error, :not_synced}, next_state} = Worker.handle_call({:subscribe, me, sync_fun}, me, next_state)
+    {:reply, {:error, :not_synced, :first_value}, next_state} = Worker.handle_call({:subscribe, me, sync_fun}, me, next_state)
     assert  {:reply, [], ^next_state} = Worker.handle_call(:subscribers, me, next_state)
     {:noreply, next_state} = Worker.handle_info({:poll_result, {:update, :second_value, :always_update}}, next_state)
     {:reply, :ok, subscribed_state} = Worker.handle_call({:subscribe, me, sync_fun}, me, next_state)

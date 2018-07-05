@@ -20,12 +20,12 @@ defmodule PollProxy do
       {:error, {:already_started, _pid}} -> :ok
       {:ok, _pid} -> :ok
     end
-    :ok = subscribe(name, pid)
+    :ok = subscribe(name, pid, options)
     {:ok, name}
   end
 
-  def subscribe(name, pid \\ self()) do
-    Worker.subscribe(name, pid)
+  def subscribe(name, pid \\ self(), options \\ []) do
+    Worker.subscribe(name, pid, options)
   end
 
   def unsubscribe(name, pid \\ self()) do

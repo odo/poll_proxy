@@ -57,10 +57,10 @@ defmodule PollProxy.Worker do
     end
     next_state = %Worker{state | subscribers: next_subscribers}
     case {stop_when_empty, next_subscribers} do
-      {false, _} ->
-        {:reply, :ok, next_state}
-      {true, %{}} ->
+      {true, subscribers} when subscribers == %{} ->
         {:stop, :normal, :ok, next_state}
+      {_, _} ->
+        {:reply, :ok, next_state}
     end
   end
   def handle_call(:subscribers, _from, %Worker{subscribers: subscribers} = state) do

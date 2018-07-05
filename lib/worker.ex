@@ -2,7 +2,7 @@ defmodule PollProxy.Worker do
   use GenServer
   alias PollProxy.Worker
 
-  defstruct [:subscribers, :poll_module, :poll_module_state, :poll_interval, :name, :stop_when_empty]
+  defstruct [:subscribers, :poll_module, :poll_module_state, :poll_interval, :name, :stop_when_empty, :last_update]
 
   defmodule PollProxy.Worker.Subscriber do
       defstruct [:pid, :monitor]
@@ -14,8 +14,9 @@ defmodule PollProxy.Worker do
     GenServer.start_link(__MODULE__, args, name: name)
   end
 
-  def subscribe(server, pid \\ self()) do
-    GenServer.call(server, {:subscribe, pid})
+  def subscribe(server, pid \\ self(), options \\ []) do
+    sync_fun = Keyword.get(options, :synconize, fn(_) -> true end)
+    GenServer.call(server, {:subscribe, pid, sync_fun})
   end
 
   def unsubscribe(server, pid \\ self()) do
@@ -36,12 +37,17 @@ defmodule PollProxy.Worker do
     {:ok, init_state}
   end
 
-  def handle_call({:subscribe, pid}, _from, %Worker{subscribers: subscribers} = state) do
+  def handle_call({:subscribe, pid, sync_fun}, _from, %Worker{subscribers: subscribers, last_update: last_update} = state) do
     case Map.get(subscribers, pid) do
       nil ->
-        subscriber = %Subscriber{pid: pid, monitor: Process.monitor(pid)}
-        next_subscribers = Map.put(subscribers, pid, subscriber)
-        {:reply, :ok, %Worker{state | subscribers: next_subscribers}}
+        case sync_fun.(last_update) do
+          true ->
+            subscriber = %Subscriber{pid: pid, monitor: Process.monitor(pid)}
+            next_subscribers = Map.put(subscribers, pid, subscriber)
+            {:reply, :ok, %Worker{state | subscribers: next_subscribers}}
+          false ->
+            {:reply, {:error, :not_synced}, state}
+        end
       _ ->
         {:reply, :ok, state}
     end
@@ -92,7 +98,7 @@ defmodule PollProxy.Worker do
       end
     )
     Process.send(self(), :poll, [])
-    {:noreply, %Worker{state | poll_module_state: next_poll_module_state}}
+    {:noreply, %Worker{state | poll_module_state: next_poll_module_state, last_update: update_data}}
   end
 
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do

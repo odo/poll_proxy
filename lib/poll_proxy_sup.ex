@@ -10,9 +10,9 @@ defmodule PollProxy.Supervisor do
     DynamicSupervisor.init(strategy: :one_for_one)
   end
 
-  def start_child(poll_module, poll_args, name, stop_when_empty \\ false)
-    when is_atom(poll_module) and is_list(poll_args) and is_atom(name) and is_boolean(stop_when_empty) do
-
+  def start_child(poll_module, poll_args, name, options)
+    when is_atom(poll_module) and is_list(poll_args) and is_atom(name) and is_list(options) do
+    stop_when_empty = Keyword.get(options, :stop_when_empty, false)
     start_args = %{poll_module: poll_module, poll_args: poll_args, name: name, stop_when_empty: stop_when_empty}
     DynamicSupervisor.start_child(
       __MODULE__,

@@ -73,7 +73,7 @@ The name for the proxy is then computed from the poll_module and the poll_args a
 Addtionaly the proxie workers are started with `stop_when_empty` enabled, meaning they are not only lazily started but also shut themselves down after the last process unsubscribes.
 
 ```elixir
-iex(1)> {:ok, server}  = PollProxy.start_proxy_and_subscribe(PollProxy.Example.ModPoller, [7])
+iex(1)> {:ok, server}  = PollProxy.start_proxy_and_subscribe(PollProxy.Example.ModPoller, [7], self())
 {:ok, :poll_proxy_1736236754}
 [... a few moments pass ...]
 iex(2)> flush

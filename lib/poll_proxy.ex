@@ -9,13 +9,14 @@ defmodule PollProxy do
     Supervisor.start_link(children, strategy: :one_for_one)
   end
 
-  def start_proxy(poll_module, poll_args, name, stop_when_empty \\ false) do
-    PollProxy.Supervisor.start_child(poll_module, poll_args, name, stop_when_empty)
+  def start_proxy(poll_module, poll_args, name, options \\ []) do
+    PollProxy.Supervisor.start_child(poll_module, poll_args, name, options)
   end
 
-  def start_proxy_and_subscribe(poll_module, poll_args, pid \\ self()) do
+  def start_proxy_and_subscribe(poll_module, poll_args, pid, options \\ []) do
+    options = Keyword.put(options, :stop_when_empty, Keyword.get(options, :stop_when_empty, true))
     name = name_from_term({poll_module, poll_args})
-    case start_proxy(poll_module, poll_args, name, true) do
+    case start_proxy(poll_module, poll_args, name, options) do
       {:error, {:already_started, _pid}} -> :ok
       {:ok, _pid} -> :ok
     end

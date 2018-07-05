@@ -56,7 +56,7 @@ defmodule PollProxy.Worker do
         Map.delete(subscribers, pid)
     end
     next_state = %Worker{state | subscribers: next_subscribers}
-    case {stop_when_empty, subscribers} do
+    case {stop_when_empty, next_subscribers} do
       {false, _} ->
         {:reply, :ok, next_state}
       {true, %{}} ->
